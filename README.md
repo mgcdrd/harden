@@ -34,7 +34,9 @@ deployment or the roles it consumes.
 ## Prerequisites
 
 - Rocky 9/10 or Debian 12/13 VM, reachable via SSH with `become: true`
-- Add the host to the `hardened` group in `inventory/hosts.yml`
+- Add the host to `../../inventory-common/hosts.yml`, under its service-role
+  group (e.g. `foreman`) — this playbook targets `hosts: all`, so
+  every host defined there gets hardened
 - If the host is (or will be) IPA-enrolled, do that enrollment **before**
   running this playbook — changing the `pam_authselect_profile` afterward can
   break LDAP auth
@@ -55,8 +57,11 @@ roles are idempotent and safe to re-run.
 
 ## Key variables
 
-All variables are in `inventory/group_vars/all/main.yml`; per-host overrides
-go in `inventory/host_vars/<fqdn>.yml`.
+Hardening tuning specific to this deployment lives in
+`inventory/group_vars/all/main.yml`; per-host overrides go in
+`inventory/host_vars/<fqdn>.yml`. Host/group topology, `ansible_user`, and
+`rsyslog_remote_host` come from `../../inventory-common` instead — see that
+repo's README for the tier rule on what belongs where.
 
 | Variable | Default | Notes |
 |----------|---------|-------|
@@ -65,15 +70,19 @@ go in `inventory/host_vars/<fqdn>.yml`.
 | `sshd_allow_groups` | unset | Uncomment to restrict SSH to specific groups |
 | `pam_authselect_profile` | `sssd` | Do not change on IPA-enrolled hosts |
 | `hardened_services_disable_nfs` | `true` | Set `false` on intentional NFS server hosts |
-| `firewall_zones` | SSH-only `public` zone | Add ports/services here, or in host_vars for host-specific exceptions |
-| `rsyslog_remote_host` | — | Set to ship logs to a central syslog server; leave empty to manage file perms only |
+
+`firewall_zones` (in `inventory-common/group_vars/<group>.yml`) and
+`rsyslog_remote_host` (in `inventory-common/group_vars/all.yml`) are no
+longer set here — see `../../inventory-common/README.md`.
 
 ---
 
 ## Client/customer delivery
 
-Portable as-is: swap `inventory/hosts.yml` and `group_vars`/`host_vars` for
-the customer's hosts and network values. Since there's no Vault dependency,
+Portable as-is: point `ansible.cfg`'s inventory path at the customer's
+`inventory-<client>` repo (cloned from `inventory-template`) instead of the
+lab's `inventory-common`, and swap this deployment's own `inventory/`
+overrides for the customer's hosts. Since there's no Vault dependency,
 there's nothing to provision in their secrets backend for this deployment —
 only `foreman` (or whichever service deployment follows) needs Vault
 populated.

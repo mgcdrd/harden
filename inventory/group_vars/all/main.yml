@@ -1,6 +1,8 @@
 ---
 
-ansible_user: svc-ansible-user
+# ansible_user and rsyslog_remote_host/_port/_protocol moved to
+# inventory-common/group_vars/all.yml — same regardless of which deployment
+# targets this host, see that repo's README for the tier rule.
 
 # ===========================================================================
 # kernel_modules — CIS 1.1 / 3.4
@@ -157,16 +159,11 @@ hardened_services_chronyd_user:     true
 
 # ===========================================================================
 # firewall — CIS 3.4 / 3.5
-# Default allows SSH only. Add ports here or in host_vars for specific hosts.
-# For multi-interface hosts, define additional zones with their interface names.
+# firewall_zones now comes from inventory-common/group_vars/<service-role
+# group>.yml (e.g. foreman) — set there once a group needs more than
+# SSH. Groups with no override fall through to the firewall role's own
+# default (SSH only), so most hosts need nothing here at all.
 # ===========================================================================
-firewall_zones:
-  - name: public
-    interfaces: []
-    allowed_tcp_ports:
-      - 22
-    allowed_udp_ports: []
-    allowed_services: []
 
 
 # ===========================================================================
@@ -178,12 +175,10 @@ journald_forward_syslog: "yes"
 
 # ===========================================================================
 # rsyslog — CIS 4.2.1
-# Set rsyslog_remote_host to ship logs to your central syslog server.
-# Leave empty to manage file permissions only (no remote forwarding).
+# rsyslog_remote_host/_port/_protocol now come from inventory-common (see
+# note at top of this file). Leave unset here to manage file permissions
+# only (no remote forwarding) on a specific host.
 # ===========================================================================
-rsyslog_remote_host:     "syslog.example.com"
-rsyslog_remote_port:     514
-rsyslog_remote_protocol: tcp
 
 
 # ===========================================================================

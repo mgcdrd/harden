@@ -15,7 +15,7 @@
 #   integrity — aide (last: DB captures final hardened state)
 
 - name: harden - Kernel and filesystem hardening
-  hosts: hardened
+  hosts: all
   become: true
   gather_facts: true
   roles:
@@ -26,7 +26,7 @@
 
 
 - name: harden - Access control hardening
-  hosts: hardened
+  hosts: all
   become: true
   gather_facts: true
   roles:
@@ -39,7 +39,7 @@
 
 
 - name: harden - Service hardening
-  hosts: hardened
+  hosts: all
   become: true
   gather_facts: true
   roles:
@@ -49,7 +49,7 @@
 
 
 - name: harden - Logging and auditing
-  hosts: hardened
+  hosts: all
   become: true
   gather_facts: true
   roles:
@@ -59,7 +59,7 @@
 
 
 - name: harden - File integrity monitoring
-  hosts: hardened
+  hosts: all
   become: true
   gather_facts: true
   roles:
