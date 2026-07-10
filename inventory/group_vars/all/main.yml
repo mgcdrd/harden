@@ -1,0 +1,200 @@
+---
+
+ansible_user: svc-ansible-user
+
+# ===========================================================================
+# kernel_modules — CIS 1.1 / 3.4
+# Blacklist unused/unsafe kernel modules. No modules are loaded by default.
+# ===========================================================================
+kernel_modules_list: []
+
+kernel_modules_blacklist:
+  # Unused network protocols
+  - dccp
+  - sctp
+  - rds
+  - tipc
+  # Uncommon/unneeded filesystems
+  - cramfs
+  - freevxfs
+  - jffs2
+  - hfs
+  - hfsplus
+  - squashfs
+  - udf
+  # USB storage — remove if hosts need USB mass storage
+  - usb-storage
+
+
+# ===========================================================================
+# sysctl — CIS 3.1–3.3
+# Network and process hardening. Written to /etc/sysctl.d/99-hardening.conf.
+# Override net.ipv4.ip_forward if this host is a router or k8s node.
+# ===========================================================================
+sysctl_conf_file: /etc/sysctl.d/99-hardening.conf
+
+sysctl_params:
+  # --- IPv4 routing ---
+  - { name: net.ipv4.ip_forward,                       value: 0 }
+  - { name: net.ipv4.conf.all.send_redirects,           value: 0 }
+  - { name: net.ipv4.conf.default.send_redirects,       value: 0 }
+  - { name: net.ipv4.conf.all.accept_redirects,         value: 0 }
+  - { name: net.ipv4.conf.default.accept_redirects,     value: 0 }
+  - { name: net.ipv4.conf.all.secure_redirects,         value: 0 }
+  - { name: net.ipv4.conf.default.secure_redirects,     value: 0 }
+  - { name: net.ipv4.conf.all.accept_source_route,      value: 0 }
+  - { name: net.ipv4.conf.default.accept_source_route,  value: 0 }
+  - { name: net.ipv4.conf.all.log_martians,             value: 1 }
+  - { name: net.ipv4.conf.default.log_martians,         value: 1 }
+  - { name: net.ipv4.conf.all.rp_filter,                value: 1 }
+  - { name: net.ipv4.conf.default.rp_filter,            value: 1 }
+  - { name: net.ipv4.tcp_syncookies,                    value: 1 }
+  - { name: net.ipv4.icmp_echo_ignore_broadcasts,       value: 1 }
+  - { name: net.ipv4.icmp_ignore_bogus_error_responses, value: 1 }
+  # --- IPv6 ---
+  - { name: net.ipv6.conf.all.forwarding,               value: 0 }
+  - { name: net.ipv6.conf.all.accept_redirects,         value: 0 }
+  - { name: net.ipv6.conf.default.accept_redirects,     value: 0 }
+  - { name: net.ipv6.conf.all.accept_source_route,      value: 0 }
+  - { name: net.ipv6.conf.default.accept_source_route,  value: 0 }
+  - { name: net.ipv6.conf.all.accept_ra,                value: 0 }
+  - { name: net.ipv6.conf.default.accept_ra,            value: 0 }
+  # --- Process hardening ---
+  - { name: kernel.randomize_va_space,                  value: 2 }
+  - { name: kernel.dmesg_restrict,                      value: 1 }
+  - { name: kernel.perf_event_paranoid,                 value: 3 }
+  - { name: kernel.yama.ptrace_scope,                   value: 1 }
+  - { name: fs.suid_dumpable,                           value: 0 }
+
+
+# ===========================================================================
+# secure_mounts — CIS 1.1
+# /dev/shm is hardened by default. Uncomment /tmp if it is a separate
+# partition — mounting a bind-mounted /tmp with noexec can break package
+# managers, so only enable this if /tmp is dedicated.
+# ===========================================================================
+secure_mounts_list:
+  - path:   /dev/shm
+    src:    none
+    fstype: tmpfs
+    opts:   nodev,noexec,nosuid
+  # - path:  /tmp
+  #   opts:  nodev,noexec,nosuid
+
+
+# ===========================================================================
+# login_banner — CIS 1.7
+# Generic pre-auth banner. Do not include hostname, OS, or version strings.
+# ===========================================================================
+login_banner_text: |
+  NOTICE: This system is for authorized use only.
+  Unauthorized access or use is strictly prohibited and may be subject to
+  criminal and civil penalties. All activity on this system is monitored
+  and recorded. By continuing, you consent to this monitoring.
+
+
+# ===========================================================================
+# sshd — CIS 5.2
+# Banner references /etc/issue.net managed by login_banner above.
+# Defaults in the sshd role are already CIS-aligned. Override here only
+# if your environment requires different settings.
+# ===========================================================================
+sshd_banner: /etc/issue.net
+
+# Uncomment to restrict SSH access to specific groups:
+# sshd_allow_groups:
+#   - sshusers
+#   - wheel
+
+
+# ===========================================================================
+# password_policy — CIS 5.3 / 5.4
+# All defaults match CIS Level 1 requirements. Override below if your
+# environment requires different aging or complexity thresholds.
+# ===========================================================================
+
+# Example relaxed policy for non-production:
+# password_policy_login_defs:
+#   - { key: PASS_MAX_DAYS, value: "365" }
+#   - { key: PASS_MIN_DAYS, value: "0"   }
+#   - { key: PASS_MIN_LEN,  value: "12"  }
+#   - { key: UMASK,         value: "022" }
+#   - { key: FAIL_DELAY,    value: "4"   }
+
+
+# ===========================================================================
+# pam — CIS 5.3 / 5.4
+# authselect profile and features for PAM stack. 'with-faillock' and
+# 'with-pwhistory' wire the conf files set by password_policy into the
+# PAM stack. Changing the profile on IPA-enrolled hosts will break LDAP auth.
+# ===========================================================================
+pam_authselect_profile: sssd
+pam_authselect_features:
+  - with-mkhomedir
+  - with-sudo
+  - with-faillock
+  - with-pwhistory
+
+
+# ===========================================================================
+# sudoers — CIS 5.3
+# All defaults are CIS-aligned. Uncomment to adjust.
+# ===========================================================================
+
+# sudoers_timestamp_timeout: 5    # minutes before sudo re-prompts
+# sudoers_use_pty: true
+
+
+# ===========================================================================
+# hardened_services — CIS 2.x
+# NFS server, emergency auth, and chronyd user are all disabled/hardened
+# by default. Set disable_nfs to false on intentional NFS server hosts.
+# ===========================================================================
+hardened_services_disable_nfs:      true
+hardened_services_emergency_auth:   true
+hardened_services_chronyd_user:     true
+
+
+# ===========================================================================
+# firewall — CIS 3.4 / 3.5
+# Default allows SSH only. Add ports here or in host_vars for specific hosts.
+# For multi-interface hosts, define additional zones with their interface names.
+# ===========================================================================
+firewall_zones:
+  - name: public
+    interfaces: []
+    allowed_tcp_ports:
+      - 22
+    allowed_udp_ports: []
+    allowed_services: []
+
+
+# ===========================================================================
+# journald — CIS 4.2.2
+# Persistent logging and syslog forwarding are the defaults.
+# ===========================================================================
+journald_forward_syslog: "yes"
+
+
+# ===========================================================================
+# rsyslog — CIS 4.2.1
+# Set rsyslog_remote_host to ship logs to your central syslog server.
+# Leave empty to manage file permissions only (no remote forwarding).
+# ===========================================================================
+rsyslog_remote_host:     "syslog.example.com"
+rsyslog_remote_port:     514
+rsyslog_remote_protocol: tcp
+
+
+# ===========================================================================
+# auditd — CIS 4.1
+# Defaults cover the full CIS audit rule set. No overrides needed for
+# standard hardening. See the auditd role README for tuning options.
+# ===========================================================================
+
+
+# ===========================================================================
+# aide — CIS 1.3
+# File integrity monitoring. Runs last so the database captures the final
+# hardened state. First run initializes the DB; subsequent runs detect drift.
+# ===========================================================================

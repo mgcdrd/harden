@@ -1,0 +1,66 @@
+---
+# Post-build OS hardening playbook
+# Applies CIS Level 1/2 controls via mgcdrd.infrabase roles.
+# Run once after provisioning, before handing off to service deployments.
+#
+# Usage:
+#   ansible-galaxy collection install -r collections/requirements.yml
+#   ansible-playbook site.yml
+#
+# Role execution order:
+#   kernel    — module blacklist, sysctl, mount hardening, coredump
+#   access    — banner, sshd, password policy, pam, sudo, cron
+#   services  — disable unused services, host firewall
+#   logging   — journald, rsyslog, auditd
+#   integrity — aide (last: DB captures final hardened state)
+
+- name: harden - Kernel and filesystem hardening
+  hosts: hardened
+  become: true
+  gather_facts: true
+  roles:
+    - mgcdrd.infrabase.kernel_modules
+    - mgcdrd.infrabase.sysctl
+    - mgcdrd.infrabase.secure_mounts
+    - mgcdrd.infrabase.coredump
+
+
+- name: harden - Access control hardening
+  hosts: hardened
+  become: true
+  gather_facts: true
+  roles:
+    - mgcdrd.infrabase.login_banner
+    - mgcdrd.infrabase.sshd
+    - mgcdrd.infrabase.password_policy
+    - mgcdrd.infrabase.pam
+    - mgcdrd.infrabase.sudoers
+    - mgcdrd.infrabase.cron
+
+
+- name: harden - Service hardening
+  hosts: hardened
+  become: true
+  gather_facts: true
+  roles:
+    - mgcdrd.infrabase.hardened_services
+    - mgcdrd.infrabase.firewall
+    - mgcdrd.infrabase.crypto_policies
+
+
+- name: harden - Logging and auditing
+  hosts: hardened
+  become: true
+  gather_facts: true
+  roles:
+    - mgcdrd.infrabase.journald
+    - mgcdrd.infrabase.rsyslog
+    - mgcdrd.infrabase.auditd
+
+
+- name: harden - File integrity monitoring
+  hosts: hardened
+  become: true
+  gather_facts: true
+  roles:
+    - mgcdrd.infrabase.aide

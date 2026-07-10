@@ -1,0 +1,24 @@
+---
+
+# foreman2 provisions /home and /var as dedicated LVs (vg0-lv_home, vg0-lv_var)
+# — group_vars/all only hardens /dev/shm since rpiblade2 has no separate
+# /home or /var to remount. CIS: mount_option_home_nodev, mount_option_var_nodev,
+# mount_option_var_nosuid.
+secure_mounts_list:
+  - path:   /dev/shm
+    src:    none
+    fstype: tmpfs
+    opts:   nodev,noexec,nosuid
+  - path:   /home
+    src:    /dev/mapper/vg0-lv_home
+    fstype: xfs
+    opts:   nodev,noexec,nosuid
+  - path:   /var
+    src:    /dev/mapper/vg0-lv_var
+    fstype: xfs
+    opts:   nodev,nosuid
+
+# Reviewed: no unowned/ungroupowned files found on foreman2's local
+# filesystems as of 2026-07-02. CIS: file_permissions_ungroupowned,
+# no_files_unowned_by_user.
+hardened_services_fix_unowned_files: true
