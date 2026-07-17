@@ -14,7 +14,7 @@
 #   logging   — journald, rsyslog, auditd
 #   integrity — aide (last: DB captures final hardened state)
 
-- name: harden - Kernel and filesystem hardening
+- name: Harden - Kernel and filesystem hardening
   hosts: all
   become: true
   gather_facts: true
@@ -25,7 +25,7 @@
     - mgcdrd.infrabase.coredump
 
 
-- name: harden - Access control hardening
+- name: Harden - Access control hardening
   hosts: all
   become: true
   gather_facts: true
@@ -38,7 +38,7 @@
     - mgcdrd.infrabase.cron
 
 
-- name: harden - Service hardening
+- name: Harden - Service hardening
   hosts: all
   become: true
   gather_facts: true
@@ -48,7 +48,7 @@
     - mgcdrd.infrabase.crypto_policies
 
 
-- name: harden - Logging and auditing
+- name: Harden - Logging and auditing
   hosts: all
   become: true
   gather_facts: true
@@ -58,7 +58,7 @@
     - mgcdrd.infrabase.auditd
 
 
-- name: harden - File integrity monitoring
+- name: Harden - File integrity monitoring
   hosts: all
   become: true
   gather_facts: true
