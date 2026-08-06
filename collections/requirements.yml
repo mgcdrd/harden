@@ -3,7 +3,7 @@ collections:
   - name: mgcdrd.infrabase
     source: https://github.com/mgcdrd/infrabase.git
     type: git
-    version: v0.5.1
+    version: v0.7.0
 
   - name: ansible.posix
     version: ">=1.5.0"
