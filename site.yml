@@ -8,11 +8,25 @@
 #   ansible-playbook site.yml
 #
 # Role execution order:
+#   storage   — grow OS partition/PV/LV if the underlying disk was resized
 #   kernel    — module blacklist, sysctl, mount hardening, coredump
 #   access    — banner, sshd, password policy, pam, sudo, cron
 #   services  — disable unused services, host firewall
 #   logging   — journald, rsyslog, auditd
 #   integrity — aide (last: DB captures final hardened state)
+
+- name: Harden - Storage (OS partition/LV expansion)
+  # VM templates are built with a small root disk; growing it later
+  # (ProxMox) doesn't extend the guest's partition/PV/VG/LV on its own.
+  # Opt-in per host via lvm_pv_grow/lvm_volumes in inventory/host_vars —
+  # both default to [] (no-op) so this is safe on hosts that need nothing.
+  # Runs first so later phases see the host at its final size.
+  hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - mgcdrd.infrabase.lvm2
+
 
 - name: Harden - Kernel and filesystem hardening
   hosts: all

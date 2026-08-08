@@ -11,6 +11,7 @@ hardened and do not re-apply these controls themselves.
 
 | Phase | Roles | CIS area |
 |---|---|---|
+| Storage | `lvm2` | n/a — OS partition/LV expansion, not a CIS control |
 | Kernel and filesystem | `kernel_modules`, `sysctl`, `secure_mounts`, `coredump` | 1.1, 3.1–3.4 |
 | Access control | `login_banner`, `sshd`, `password_policy`, `pam`, `sudoers`, `cron` | 1.7, 5.2–5.4 |
 | Services | `hardened_services`, `firewall`, `crypto_policies` | 2.x, 3.4–3.5 |
@@ -70,6 +71,8 @@ repo's README for the tier rule on what belongs where.
 | `sshd_allow_groups` | unset | Uncomment to restrict SSH to specific groups |
 | `pam_authselect_profile` | `sssd` | Do not change on IPA-enrolled hosts |
 | `hardened_services_disable_nfs` | `true` | Set `false` on intentional NFS server hosts |
+| `lvm_pv_grow` | `[]` | Opt-in per host — grows a partition + its PV to consume space added to the underlying disk. See `mgcdrd.infrabase.lvm2`'s README |
+| `lvm_volumes` | `[]` | Opt-in per host — extends specific LVs (e.g. `lv_root`) once `lvm_pv_grow` (or a VG extension) has made room |
 
 `firewall_zones` (in `inventory-common/group_vars/<group>.yml`) and
 `rsyslog_remote_host` (in `inventory-common/group_vars/all.yml`) are no
