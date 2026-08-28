@@ -12,6 +12,7 @@
 #   kernel    — module blacklist, sysctl, mount hardening, coredump
 #   access    — banner, sshd, password policy, pam, sudo, cron
 #   services  — disable unused services, host firewall
+#   mail      — postfix, client mode (cron/alert mail out to a relay)
 #   logging   — journald, rsyslog, auditd
 #   integrity — aide (last: DB captures final hardened state)
 
@@ -60,6 +61,18 @@
     - mgcdrd.infrabase.hardened_services
     - mgcdrd.infrabase.firewall
     - mgcdrd.infrabase.crypto_policies
+
+
+- name: Harden - Mail relay client
+  # Every host gets postfix in client mode so local/cron/alert mail has
+  # somewhere to go. postfix_relayhost is unset until a relay target
+  # (internal host or external SMTP service) is decided — see the
+  # postfix section in inventory/group_vars/all/main.yml.
+  hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - mgcdrd.infrabase.postfix
 
 
 - name: Harden - Logging and auditing

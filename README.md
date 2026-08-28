@@ -15,6 +15,7 @@ hardened and do not re-apply these controls themselves.
 | Kernel and filesystem | `kernel_modules`, `sysctl`, `secure_mounts`, `coredump` | 1.1, 3.1–3.4 |
 | Access control | `login_banner`, `sshd`, `password_policy`, `pam`, `sudoers`, `cron` | 1.7, 5.2–5.4 |
 | Services | `hardened_services`, `firewall`, `crypto_policies` | 2.x, 3.4–3.5 |
+| Mail relay client | `postfix` | n/a — outbound relay for cron/alert mail, not a CIS control |
 | Logging and auditing | `journald`, `rsyslog`, `auditd` | 4.1, 4.2 |
 | File integrity | `aide` | 1.3 |
 

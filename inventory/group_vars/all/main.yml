@@ -167,6 +167,19 @@ hardened_services_chronyd_user:     true
 
 
 # ===========================================================================
+# postfix — mail relay client
+# postfix_mode defaults to 'client' and postfix_relayhost defaults to ""
+# in the role, which is what we want here: postfix installed and running
+# on every host, but with no relay target configured yet. Set
+# postfix_relayhost (and postfix_sasl_*/postfix_smtp_tls_* if the relay
+# needs auth) once a relay target — internal host or external SMTP
+# service — is decided. If it ends up being an internal relay host, give
+# that host its own group in inventory-common with postfix_mode: relay,
+# same pattern as the syslog group's rsyslog override.
+# ===========================================================================
+
+
+# ===========================================================================
 # journald — CIS 4.2.2
 # Persistent logging and syslog forwarding are the defaults.
 # ===========================================================================
