@@ -25,10 +25,18 @@ than a pre-hardening snapshot.
 
 ## Vault
 
-**None required.** This deployment applies OS-level controls only (kernel,
-sysctl, PAM, sudo, firewalld, logging, AIDE) — nothing it manages needs a
-credential, so no `vault.yml` or Vault lookups exist anywhere in this
-deployment or the roles it consumes.
+**None required for the roles themselves** — this deployment applies
+OS-level controls only (kernel, sysctl, PAM, sudo, firewalld, logging,
+AIDE), no `vault.yml` or Vault lookups anywhere in this deployment or the
+roles it consumes.
+
+Reaching hosts still on Foreman's build network *does* need a credential,
+though — `ansible.cfg`'s third inventory source (`build.foreman.yml`) needs
+`FOREMAN_URL`/`FOREMAN_USER`/`FOREMAN_PASSWORD` in the environment before
+running. `source ../../inventory-common/foreman-inventory-env.sh` (Vault-
+backed) before `ansible-playbook` if you're targeting anything on the
+`building` group; skip it entirely if you're only targeting hosts already on
+their real network — the dynamic source just returns nothing.
 
 ---
 
@@ -37,7 +45,10 @@ deployment or the roles it consumes.
 - Rocky 9/10 or Debian 12/13 VM, reachable via SSH with `become: true`
 - Add the host to `../../inventory-common/hosts.yml`, under its service-role
   group (e.g. `foreman`) — this playbook targets `hosts: all`, so
-  every host defined there gets hardened
+  every host defined there gets hardened. A host still on Foreman's Build
+  subnet doesn't need adding here at all — `build.foreman.yml` picks it up
+  automatically into the `building` group, reachable via SSH ProxyJump
+  through Foreman (see `../../inventory-common/README.md`)
 - If the host is (or will be) IPA-enrolled, do that enrollment **before**
   running this playbook — changing the `pam_authselect_profile` afterward can
   break LDAP auth
@@ -85,7 +96,11 @@ longer set here — see `../../inventory-common/README.md`.
 Portable as-is: point `ansible.cfg`'s inventory path at the customer's
 `inventory-<client>` repo (cloned from `inventory-template`) instead of the
 lab's `inventory-common`, and swap this deployment's own `inventory/`
-overrides for the customer's hosts. Since there's no Vault dependency,
-there's nothing to provision in their secrets backend for this deployment —
-only `foreman` (or whichever service deployment follows) needs Vault
-populated.
+overrides for the customer's hosts. The roles themselves have no Vault
+dependency — only `foreman` (or whichever service deployment follows) needs
+Vault populated for its own secrets. If the customer's Foreman also gateways
+a NAT'd build network, `build.foreman.yml`'s credential needs populating in
+their Vault too (see `inventory-<client>/foreman-inventory-env.sh`,
+mirrored from `inventory-template`); if they don't use that pattern, drop
+the third `-i` source from `ansible.cfg` and the `theforeman.foreman`
+collection dependency.
