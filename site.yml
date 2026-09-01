@@ -9,6 +9,8 @@
 #
 # Role execution order:
 #   storage   — grow OS partition/PV/LV if the underlying disk was resized
+#   guest     — qemu-guest-agent (VM/Proxmox integration, not a CIS control;
+#               skipped on proxmox_ve and misc since those aren't QEMU guests)
 #   kernel    — module blacklist, sysctl, mount hardening, coredump
 #   access    — banner, sshd, password policy, pam, sudo, cron
 #   services  — disable unused services, host firewall
@@ -27,6 +29,18 @@
   gather_facts: true
   roles:
     - mgcdrd.infrabase.lvm2
+
+
+- name: Harden - Proxmox guest agent
+  # Not a CIS control — every QEMU/Proxmox VM guest should run
+  # qemu-guest-agent regardless of hardening level. Excludes proxmox_ve
+  # (hypervisor nodes) and misc (rpiblade bare metal) since neither is a
+  # QEMU guest.
+  hosts: all:!proxmox_ve:!misc
+  become: true
+  gather_facts: true
+  roles:
+    - mgcdrd.infrabase.qemu_guest_agent
 
 
 - name: Harden - Kernel and filesystem hardening
