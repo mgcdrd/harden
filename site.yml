@@ -10,13 +10,23 @@
 # Role execution order:
 #   storage   — grow OS partition/PV/LV if the underlying disk was resized
 #   guest     — qemu-guest-agent (VM/Proxmox integration, not a CIS control;
-#               skipped on proxmox_ve and misc since those aren't QEMU guests)
+#               skipped on proxmox_ve and misc since those aren't QEMU guests,
+#               and self-skips inside a container)
 #   kernel    — module blacklist, sysctl, mount hardening, coredump
 #   access    — banner, sshd, password policy, pam, sudo, cron
 #   services  — disable unused services, host firewall
 #   mail      — postfix, client mode (cron/alert mail out to a relay)
 #   logging   — journald, rsyslog, auditd
 #   integrity — aide (last: DB captures final hardened state)
+#
+# Container targets (Proxmox LXC etc.): the storage play sets
+# harden_container_guest from virt facts, and the sysctl / secure_mounts /
+# firewall / auditd roles are skipped when it is true — those need namespaced
+# kernel, netfilter, or audit access the container doesn't have; hardening them
+# is the host's job. Each has its own harden_container_skip_<role> toggle
+# (defaults to harden_container_guest) — override one in host_vars to run that
+# role on a container that supports it, e.g. firewalld in a privileged LXC.
+# Everything else in this playbook runs unchanged in a container.
 
 - name: Harden - Storage (OS partition/LV expansion)
   # VM templates are built with a small root disk; growing it later
@@ -27,6 +37,19 @@
   hosts: all
   become: true
   gather_facts: true
+  pre_tasks:
+    - name: Harden - Detect container guest
+      # Set once here (first play, facts already gathered) and read by the
+      # kernel-facing roles in later plays via the harden_container_skip_<role>
+      # vars in group_vars. set_fact stores a real bool and is not cacheable,
+      # so it is recomputed every run regardless of the shared fact cache.
+      # tags: always so a --tags run still gets the detection.
+      ansible.builtin.set_fact:
+        harden_container_guest: "{{ (ansible_facts['virtualization_role'] | default('host')) == 'guest'
+          and ansible_facts['virtualization_type'] | default('') in _harden_container_virt_types }}"
+      vars:
+        _harden_container_virt_types: [lxc, systemd-nspawn, docker, podman, container, openvz]
+      tags: always
   roles:
     - mgcdrd.infrabase.lvm2
 
@@ -49,8 +72,10 @@
   gather_facts: true
   roles:
     - mgcdrd.infrabase.kernel_modules
-    - mgcdrd.infrabase.sysctl
-    - mgcdrd.infrabase.secure_mounts
+    - role: mgcdrd.infrabase.sysctl
+      when: not (harden_container_skip_sysctl | bool)
+    - role: mgcdrd.infrabase.secure_mounts
+      when: not (harden_container_skip_secure_mounts | bool)
     - mgcdrd.infrabase.coredump
 
 
@@ -73,7 +98,8 @@
   gather_facts: true
   roles:
     - mgcdrd.infrabase.hardened_services
-    - mgcdrd.infrabase.firewall
+    - role: mgcdrd.infrabase.firewall
+      when: not (harden_container_skip_firewall | bool)
     - mgcdrd.infrabase.crypto_policies
 
 
@@ -96,7 +122,8 @@
   roles:
     - mgcdrd.infrabase.journald
     - mgcdrd.infrabase.rsyslog
-    - mgcdrd.infrabase.auditd
+    - role: mgcdrd.infrabase.auditd
+      when: not (harden_container_skip_auditd | bool)
 
 
 - name: Harden - File integrity monitoring

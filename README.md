@@ -12,16 +12,18 @@ hardened and do not re-apply these controls themselves.
 | Phase | Roles | CIS area |
 |---|---|---|
 | Storage | `lvm2` | n/a — OS partition/LV expansion, not a CIS control |
-| Proxmox guest agent | `qemu_guest_agent` | n/a — VM/Proxmox integration, not a CIS control. Skips `proxmox_ve` and `misc` (not QEMU guests) |
-| Kernel and filesystem | `kernel_modules`, `sysctl`, `secure_mounts`, `coredump` | 1.1, 3.1–3.4 |
+| Proxmox guest agent | `qemu_guest_agent` | n/a — VM/Proxmox integration, not a CIS control. Skips `proxmox_ve` and `misc` (not QEMU guests), and self-skips inside a container |
+| Kernel and filesystem | `kernel_modules`, `sysctl`†, `secure_mounts`†, `coredump` | 1.1, 3.1–3.4 |
 | Access control | `login_banner`, `sshd`, `password_policy`, `pam`, `sudoers`, `cron` | 1.7, 5.2–5.4 |
-| Services | `hardened_services`, `firewall`, `crypto_policies` | 2.x, 3.4–3.5 |
+| Services | `hardened_services`, `firewall`†, `crypto_policies` | 2.x, 3.4–3.5 |
 | Mail relay client | `postfix` | n/a — outbound relay for cron/alert mail, not a CIS control |
-| Logging and auditing | `journald`, `rsyslog`, `auditd` | 4.1, 4.2 |
+| Logging and auditing | `journald`, `rsyslog`, `auditd`† | 4.1, 4.2 |
 | File integrity | `aide` | 1.3 |
 
 `aide` runs last so its database captures the final hardened state rather
 than a pre-hardening snapshot.
+
+† Skipped on container guests — see [Container / LXC targets](#container--lxc-targets).
 
 ---
 
@@ -42,9 +44,55 @@ their real network — the dynamic source just returns nothing.
 
 ---
 
+## Container / LXC targets
+
+The playbook runs against a Rocky 9/10 or Debian 12/13 **container** (Proxmox
+LXC, `systemd-nspawn`, Docker) as well as a full VM. The storage play sets
+`harden_container_guest` from `ansible_facts['virtualization_type']` /
+`virtualization_role`, and four roles are skipped in a container via per-role
+`harden_container_skip_<role>` toggles (each defaults to
+`harden_container_guest`):
+
+| Skipped role | Toggle | Why |
+|---|---|---|
+| `sysctl` | `harden_container_skip_sysctl` | `kernel.*` / `fs.*` keys are read-only from the container namespace; `sysctl --system` would fail |
+| `secure_mounts` | `harden_container_skip_secure_mounts` | remounting `/dev/shm` returns `EPERM` in an unprivileged container; mount opts are inherited from the host |
+| `firewall` | `harden_container_skip_firewall` | `firewalld` / `nftables` can't manage host netfilter from an unprivileged container — filter at the host or in Proxmox |
+| `auditd` | `harden_container_skip_auditd` | the kernel audit subsystem isn't namespaced; the host's `auditd` already records container activity |
+
+Everything else (`lvm2`, `kernel_modules`, `coredump`, `login_banner`, `sshd`,
+`password_policy`, `pam`, `sudoers`, `cron`, `hardened_services`,
+`crypto_policies`, `postfix`, `journald`, `rsyslog`, `aide`) runs unchanged.
+`qemu_guest_agent` self-skips inside a container regardless of this deployment.
+
+### Running one of the four on a container that supports it
+
+Override just that toggle in `inventory/host_vars/<fqdn>.yml`. The common case
+is a container that keeps its **own** firewall — a privileged LXC, or an
+unprivileged one on a host whose kernel has `nf_tables` loaded. Confirm it
+works in the container first:
+
+```bash
+nft add table inet t && nft delete table inet t && echo "nftables OK"
+systemctl start firewalld && firewall-cmd --state
+```
+
+then:
+
+```yaml
+# inventory/host_vars/ct-web01.example.com.yml
+harden_container_skip_firewall: false
+```
+
+`sysctl` / `secure_mounts` / `auditd` on that host stay skipped. Note Proxmox's
+own CT/bridge firewall is a separate layer in front of the container's veth —
+running both is fine but is two rulesets to maintain.
+
+---
+
 ## Prerequisites
 
-- Rocky 9/10 or Debian 12/13 VM, reachable via SSH with `become: true`
+- Rocky 9/10 or Debian 12/13 VM or container, reachable via SSH with `become: true`
 - Add the host to `../../inventory-common/hosts.yml`, under its service-role
   group (e.g. `foreman`) — this playbook targets `hosts: all`, so
   every host defined there gets hardened. A host still on Foreman's Build
@@ -79,6 +127,8 @@ repo's README for the tier rule on what belongs where.
 
 | Variable | Default | Notes |
 |----------|---------|-------|
+| `harden_container_guest` | auto-detected (`false` fallback) | Set true by the storage play on LXC/nspawn/Docker guests |
+| `harden_container_skip_{sysctl,secure_mounts,firewall,auditd}` | `harden_container_guest` | Per-role container skip. Override one `false` in host_vars to run that role on a container that supports it — see [Container / LXC targets](#container--lxc-targets) |
 | `kernel_modules_blacklist` | unused net protocols, uncommon FS, usb-storage | Remove `usb-storage` if the host needs USB mass storage |
 | `secure_mounts_list` | `/dev/shm` hardened | `/tmp` entry is commented out — only enable if `/tmp` is a dedicated partition |
 | `sshd_allow_groups` | unset | Uncomment to restrict SSH to specific groups |
