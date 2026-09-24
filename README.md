@@ -109,7 +109,22 @@ running both is fine but is two rulesets to maintain.
 
 ```bash
 ansible-galaxy collection install -r collections/requirements.yml
+source ../../inventory-common/fleet-env.sh    # load every multi-instance service's hosts (k8s clusters, ...)
 ansible-playbook site.yml
+```
+
+`ansible.cfg` only lists the root `hosts.yml`. Hosts that live in
+`inventory-common/instances/` (k8s nodes today) are added by `fleet-env.sh`;
+skip it and those hosts are silently left out of the run. Pass an environment
+(`source ... dev`) to load only `dev` and `dev_*` instances.
+
+To harden one instance, load it by name and limit to its instance group
+(`<service>_<name>`); without `--limit` the run also covers every host in the
+root `hosts.yml`:
+
+```bash
+source ../../inventory-common/fleet-env.sh lab
+ansible-playbook site.yml --limit k8s_lab --list-hosts   # check, then drop --list-hosts
 ```
 
 No tags are defined per-phase — every run applies the full control set. All
