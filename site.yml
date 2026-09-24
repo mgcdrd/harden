@@ -5,7 +5,13 @@
 #
 # Usage:
 #   ansible-galaxy collection install -r collections/requirements.yml
+#   source ../../inventory-common/fleet-env.sh    # adds instances/* hosts
 #   ansible-playbook site.yml
+#
+# Without the source step an unlimited run silently skips every host that
+# lives in inventory-common/instances/ (k8s nodes today); the first play below
+# fails the run instead. Bypass with -e fleet_check=false — also set it as an
+# extra var on the AWX job template, where fleet-env.sh isn't used.
 #
 # Role execution order:
 #   storage   — grow OS partition/PV/LV if the underlying disk was resized
@@ -27,6 +33,27 @@
 # (defaults to harden_container_guest) — override one in host_vars to run that
 # role on a container that supports it, e.g. firewalld in a privileged LXC.
 # Everything else in this playbook runs unchanged in a container.
+
+- name: Harden - Fleet inventory check
+  # Runs on localhost, so --limit skips it: it only guards unlimited runs,
+  # which are where instance hosts get dropped without any error. A limited
+  # run either names an instance group (fails on its own if not loaded) or
+  # hosts the operator chose.
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: always
+  tasks:
+    - name: Harden - Assert fleet-env.sh was sourced
+      ansible.builtin.assert:
+        that:
+          - lookup('ansible.builtin.env', 'FLEET_ENV_LOADED') | length > 0
+        fail_msg: >-
+          fleet-env.sh was not sourced, so hosts in inventory-common/instances/
+          are missing from this run. Run `source ../../inventory-common/fleet-env.sh`
+          first, or pass -e fleet_check=false to run without them.
+        quiet: true
+      when: fleet_check | default(true) | bool
 
 - name: Harden - Storage (OS partition/LV expansion)
   # VM templates are built with a small root disk; growing it later

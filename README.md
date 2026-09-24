@@ -115,7 +115,18 @@ ansible-playbook site.yml
 
 `ansible.cfg` only lists the root `hosts.yml`. Hosts that live in
 `inventory-common/instances/` (k8s nodes today) are added by `fleet-env.sh`;
-skip it and those hosts are silently left out of the run. Pass an environment
+skip it and those hosts would be silently left out of the run, so the first
+play (`Harden - Fleet inventory check`) fails an unlimited run when the script
+wasn't sourced. Two things to know about it:
+
+- It runs on `localhost`, so `--limit` skips it. It only guards unlimited runs;
+  a run limited to an instance group fails on its own if the group isn't
+  loaded.
+- Bypass it with `-e fleet_check=false` to run against just the root-inventory
+  hosts. Under AWX, where `fleet-env.sh` isn't used (each instance is an
+  inventory source instead), set `fleet_check: false` in the job template's
+  extra variables.
+ Pass an environment
 (`source ... dev`) to load only `dev` and `dev_*` instances.
 
 To harden one instance, load it by name and limit to its instance group
