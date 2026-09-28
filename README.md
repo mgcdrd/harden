@@ -11,6 +11,7 @@ hardened and do not re-apply these controls themselves.
 
 | Phase | Roles | CIS area |
 |---|---|---|
+| Ansible remote tmp bootstrap | (raw task, no role) | n/a — creates `/var/lib/ansible-tmp` so later plays survive `secure_mounts` remounting `/home` noexec |
 | Storage | `lvm2` | n/a — OS partition/LV expansion, not a CIS control |
 | Proxmox guest agent | `qemu_guest_agent` | n/a — VM/Proxmox integration, not a CIS control. Skips `proxmox_ve` and `misc` (not QEMU guests), and self-skips inside a container |
 | Kernel and filesystem | `kernel_modules`, `sysctl`†, `secure_mounts`†, `coredump` | 1.1, 3.1–3.4 |

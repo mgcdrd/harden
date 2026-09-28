@@ -14,6 +14,9 @@
 # extra var on the AWX job template, where fleet-env.sh isn't used.
 #
 # Role execution order:
+#   tmp_bootstrap — create /var/lib/ansible-tmp so later plays survive
+#               secure_mounts remounting /home noexec, this run and every
+#               run after (see inventory-common/group_vars/all/all.yml)
 #   storage   — grow OS partition/PV/LV if the underlying disk was resized
 #   guest     — qemu-guest-agent (VM/Proxmox integration, not a CIS control;
 #               skipped on proxmox_ve and misc since those aren't QEMU guests,
@@ -54,6 +57,28 @@
           first, or pass -e fleet_check=false to run without them.
         quiet: true
       when: fleet_check | default(true) | bool
+
+- name: Harden - Ansible remote tmp bootstrap
+  # ansible_remote_tmp (inventory-common/group_vars/all) points at
+  # /var/lib/ansible-tmp instead of the default ~/.ansible/tmp, because
+  # secure_mounts remounts /home noexec later in this same run - and every
+  # run after. But that directory has to exist and be owned by the
+  # connecting user before any module-based task (even gather_facts) can
+  # use it, on a run of any age. raw bypasses remote_tmp entirely (a plain
+  # SSH exec, no module machinery), so it's the only thing that can create
+  # it without hitting the same chicken-and-egg problem it's fixing.
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Harden - Create ansible remote tmp directory
+      ansible.builtin.raw: >-
+        mkdir -p {{ ansible_remote_tmp }} &&
+        chown {{ ansible_user }} {{ ansible_remote_tmp }} &&
+        chmod 0700 {{ ansible_remote_tmp }}
+      changed_when: false
+      tags: always
+
 
 - name: Harden - Storage (OS partition/LV expansion)
   # VM templates are built with a small root disk; growing it later
