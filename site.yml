@@ -5,18 +5,16 @@
 #
 # Usage:
 #   ansible-galaxy collection install -r collections/requirements.yml
-#   source ../../inventory-common/fleet-env.sh    # adds instances/* hosts
-#   ansible-playbook site.yml
+#   ansible-playbook site.yml                    # every host in the environment inventory
+#   ansible-playbook site.yml --limit <host>
 #
-# Without the source step an unlimited run silently skips every host that
-# lives in inventory-common/instances/ (k8s nodes today); the first play below
-# fails the run instead. Bypass with -e fleet_check=false — also set it as an
-# extra var on the AWX job template, where fleet-env.sh isn't used.
+# The inventory is the one set in ansible.cfg (lab); for another environment
+# pass -i <inventory>/<env>/hosts.yml.
 #
 # Role execution order:
 #   tmp_bootstrap — create /var/lib/ansible-tmp so later plays survive
-#               secure_mounts remounting /home noexec, this run and every
-#               run after (see inventory-common/group_vars/all/all.yml)
+#               the storage role remounting /home noexec, this run and every
+#               run after (see group_vars/all/all.yml in the inventory)
 #   storage   — grow OS partition/PV/LV if the underlying disk was resized
 #   guest     — qemu-guest-agent (VM/Proxmox integration, not a CIS control;
 #               skipped on proxmox_ve and misc since those aren't QEMU guests,
@@ -29,39 +27,16 @@
 #   integrity — aide (last: DB captures final hardened state)
 #
 # Container targets (Proxmox LXC etc.): the storage play sets
-# harden_container_guest from virt facts, and the sysctl / secure_mounts /
+# harden_container_guest from virt facts, and the sysctl / storage /
 # firewall / auditd roles are skipped when it is true — those need namespaced
 # kernel, netfilter, or audit access the container doesn't have; hardening them
-# is the host's job. Each has its own harden_container_skip_<role> toggle
-# (defaults to harden_container_guest) — override one in host_vars to run that
-# role on a container that supports it, e.g. firewalld in a privileged LXC.
-# Everything else in this playbook runs unchanged in a container.
-
-- name: Harden - Fleet inventory check
-  # Runs on localhost, so --limit skips it: it only guards unlimited runs,
-  # which are where instance hosts get dropped without any error. A limited
-  # run either names an instance group (fails on its own if not loaded) or
-  # hosts the operator chose.
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  tags: always
-  tasks:
-    - name: Harden - Assert fleet-env.sh was sourced
-      ansible.builtin.assert:
-        that:
-          - lookup('ansible.builtin.env', 'FLEET_ENV_LOADED') | length > 0
-        fail_msg: >-
-          fleet-env.sh was not sourced, so hosts in inventory-common/instances/
-          are missing from this run. Run `source ../../inventory-common/fleet-env.sh`
-          first, or pass -e fleet_check=false to run without them.
-        quiet: true
-      when: fleet_check | default(true) | bool
+# is the host's job. Everything else in this playbook runs unchanged in a
+# container.
 
 - name: Harden - Ansible remote tmp bootstrap
-  # ansible_remote_tmp (inventory-common/group_vars/all) points at
+  # ansible_remote_tmp (group_vars/all in the inventory) points at
   # /var/lib/ansible-tmp instead of the default ~/.ansible/tmp, because
-  # secure_mounts remounts /home noexec later in this same run - and every
+  # the storage role remounts /home noexec later in this same run - and every
   # run after. But that directory has to exist and be owned by the
   # connecting user before any module-based task (even gather_facts) can
   # use it, on a run of any age. raw bypasses remote_tmp entirely (a plain
@@ -80,11 +55,12 @@
       tags: always
 
 
-- name: Harden - Storage (OS partition/LV expansion)
+- name: Harden - Storage (disks, LVM, mounts and CIS mount options)
   # VM templates are built with a small root disk; growing it later
   # (ProxMox) doesn't extend the guest's partition/PV/VG/LV on its own.
-  # Opt-in per host via lvm_pv_grow/lvm_volumes in inventory/host_vars —
-  # both default to [] (no-op) so this is safe on hosts that need nothing.
+  # Opt-in per host via storage_disks/storage_mounts (and storage_scheme)
+  # in inventory — all default to empty, so a host that sets nothing is
+  # untouched. Also applies the CIS 1.1 mount options from storage_mounts.
   # Runs first so later phases see the host at its final size.
   hosts: all
   become: true
@@ -92,8 +68,7 @@
   pre_tasks:
     - name: Harden - Detect container guest
       # Set once here (first play, facts already gathered) and read by the
-      # kernel-facing roles in later plays via the harden_container_skip_<role>
-      # vars in group_vars. set_fact stores a real bool and is not cacheable,
+      # kernel-facing roles in later plays. set_fact stores a real bool and is not cacheable,
       # so it is recomputed every run regardless of the shared fact cache.
       # tags: always so a --tags run still gets the detection.
       ansible.builtin.set_fact:
@@ -103,7 +78,8 @@
         _harden_container_virt_types: [lxc, systemd-nspawn, docker, podman, container, openvz]
       tags: always
   roles:
-    - mgcdrd.infrabase.lvm2
+    - role: mgcdrd.infrabase.storage
+      when: not (harden_container_guest | bool)
 
 
 - name: Harden - Proxmox guest agent
@@ -125,9 +101,7 @@
   roles:
     - mgcdrd.infrabase.kernel_modules
     - role: mgcdrd.infrabase.sysctl
-      when: not (harden_container_skip_sysctl | bool)
-    - role: mgcdrd.infrabase.secure_mounts
-      when: not (harden_container_skip_secure_mounts | bool)
+      when: not (harden_container_guest | bool)
     - mgcdrd.infrabase.coredump
 
 
@@ -151,15 +125,14 @@
   roles:
     - mgcdrd.infrabase.hardened_services
     - role: mgcdrd.infrabase.firewall
-      when: not (harden_container_skip_firewall | bool)
+      when: not (harden_container_guest | bool)
     - mgcdrd.infrabase.crypto_policies
 
 
 - name: Harden - Mail relay client
   # Every host gets postfix in client mode so local/cron/alert mail has
-  # somewhere to go. postfix_relayhost is unset until a relay target
-  # (internal host or external SMTP service) is decided — see the
-  # postfix section in inventory/group_vars/all/main.yml.
+  # somewhere to go. postfix_relayhost is set in the inventory's
+  # group_vars/all/harden.yml.
   hosts: all
   become: true
   gather_facts: true
@@ -175,7 +148,7 @@
     - mgcdrd.infrabase.journald
     - mgcdrd.infrabase.rsyslog
     - role: mgcdrd.infrabase.auditd
-      when: not (harden_container_skip_auditd | bool)
+      when: not (harden_container_guest | bool)
 
 
 - name: Harden - File integrity monitoring
